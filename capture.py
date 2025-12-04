@@ -7,6 +7,7 @@ from pacai.core.agentinfo import AgentInfo
 from pacai.core.board import Position
 from pacai.core.features import FeatureDict
 from pacai.search.distance import DistancePreComputer
+from pacai.pacman.board import MARKER_CAPSULE
 
 MAX_DIST: float = 9999.0
 
@@ -17,6 +18,8 @@ class StudentCaptureAgent(GreedyFeatureAgent):
         self._distances = DistancePreComputer()
         self._frontier: list[Position] = []
         self._initial_position: Position | None = None
+        self._mid_col: float = 0.0
+        self._is_east_team: bool = False
 
     def game_start(self, initial_state: GameState) -> None:
         super().game_start(initial_state)
@@ -79,6 +82,15 @@ class StudentCaptureAgent(GreedyFeatureAgent):
 
         return min(self._distance(position, entry) for entry in self._frontier)
 
+    def _is_home(self, position: Position | None) -> bool:
+        if (position is None):
+            return False
+
+        if self._is_east_team:
+            return position.col >= self._mid_col
+
+        return position.col < self._mid_col
+
 class AttackerAgent(StudentCaptureAgent):
     def __init__(self, **kwargs: typing.Any) -> None:
         super().__init__(**kwargs)
@@ -92,6 +104,7 @@ class AttackerAgent(StudentCaptureAgent):
             'stopped': -80.0,
             'reverse': -4.0,
             'on_home_side': -10.0,
+            'capsule_distance': -5.0,
         })
 
     def compute_features(self, state: GameState, action: Action) -> FeatureDict:
@@ -127,6 +140,16 @@ class AttackerAgent(StudentCaptureAgent):
         capped_ghost_distance = float(min(ghost_distance, 12.0))
         features['distance_to_ghost'] = capped_ghost_distance
         features['ghost_near'] = float(ghost_distance <= 3.0)
+
+        features['capsule_distance'] = 0.0
+        capsules = [
+            capsule
+            for capsule in state.board.get_marker_positions(MARKER_CAPSULE)
+            if not self._is_home(capsule)
+        ]
+
+        if capsules and (ghost_distance <= 4.0) and state.is_pacman(agent_index = self.agent_index):
+            features['capsule_distance'] = float(self._closest_distance(position, capsules, MAX_DIST))
 
         return features
 
